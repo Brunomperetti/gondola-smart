@@ -38,6 +38,13 @@ def test_compare() -> None:
     assert item["position"] == 1
 
 
+def test_compare_accepts_empty_product_list() -> None:
+    response = client.post("/compare", json={"products": []})
+
+    assert response.status_code == 200
+    assert response.json() == {"rankings": {}}
+
+
 def test_demo_loads_fixture_and_groups_products() -> None:
     response = client.get("/demo")
     assert response.status_code == 200

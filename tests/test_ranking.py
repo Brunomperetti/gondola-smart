@@ -40,6 +40,16 @@ def test_ranking_groups_different_categories() -> None:
     assert result["pasta"][0].product.id == "pasta"
 
 
+def test_equal_normalized_prices_preserve_input_order() -> None:
+    first = make_product("first", "cookies", 1000, 200)
+    second = make_product("second", "cookies", 500, 100)
+
+    ranked = rank_products([second, first])["cookies"]
+
+    assert [item.product.id for item in ranked] == ["second", "first"]
+    assert ranked[0].savings_vs_next == 0
+
+
 def test_low_confidence_requires_confirmation() -> None:
     uncertain = make_product("uncertain", "cookies", 1000, 200).model_copy(
         update={"confidence": 0.74}

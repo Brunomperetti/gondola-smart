@@ -1,8 +1,15 @@
 """Product domain model."""
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.comparison.categories import CATEGORY_CONFIG
 
@@ -33,6 +40,25 @@ class Product(BaseModel):
             supported = ", ".join(sorted(CATEGORY_CONFIG))
             raise ValueError(f"unknown category '{value}'; supported: {supported}")
         return value
+
+    @model_validator(mode="after")
+    def validate_package_data(self) -> Self:
+        """Ensure package metadata represents a coherent physical package."""
+
+        paper_categories = {"toilet_paper", "paper_towel"}
+        if self.category in paper_categories:
+            if self.package_count is None:
+                raise ValueError(f"category '{self.category}' requires package_count")
+            if self.unit_length is None:
+                raise ValueError(f"category '{self.category}' requires unit_length")
+
+        if (
+            self.unit in {"unit", "units"}
+            and self.package_count is not None
+            and self.quantity != self.package_count
+        ):
+            raise ValueError("quantity must match package_count for unit-based products")
+        return self
 
     @computed_field
     @property

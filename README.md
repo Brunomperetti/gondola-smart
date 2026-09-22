@@ -57,9 +57,27 @@ el ranking y aparece con `requires_confirmation: true`.
 
 Se requiere Python 3.12.
 
+En Linux o macOS:
+
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+En Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+En Windows CMD:
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
 python -m pip install -r requirements.txt
 ```
 
@@ -81,6 +99,10 @@ La documentación interactiva Swagger queda disponible en
 - `GET /demo`: compara los productos ficticios del archivo de ejemplo.
 - `POST /analyze/mock`: simula detección, normalización y ranking completos.
 
+Cuando dos productos tienen exactamente el mismo precio normalizado, el ranking
+conserva el orden en el que fueron recibidos. Las posiciones continúan siendo
+secuenciales; esta versión no asigna posiciones compartidas a los empates.
+
 Ejemplo mínimo para `/compare`:
 
 ```bash
@@ -99,6 +121,8 @@ pytest
 
 Las pruebas cubren conversiones, todas las modalidades de normalización,
 validaciones, ranking, agrupación por categoría, confianza y los endpoints.
+El workflow de GitHub Actions **Tests** ejecuta `python -m pytest -q` con Python
+3.12 ante cada push a `main` y cada pull request dirigido a `main`.
 
 ## Alcance futuro
 

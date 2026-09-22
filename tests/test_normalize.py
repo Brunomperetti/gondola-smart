@@ -76,6 +76,55 @@ def test_price_per_total_meter_of_toilet_paper() -> None:
     assert result.display_unit == "metro"
 
 
+def test_toilet_paper_requires_package_count() -> None:
+    with pytest.raises(ValidationError, match="requires package_count"):
+        product(
+            category="toilet_paper",
+            quantity=4,
+            unit="units",
+            unit_length=30,
+        )
+
+
+def test_toilet_paper_requires_unit_length() -> None:
+    with pytest.raises(ValidationError, match="requires unit_length"):
+        product(
+            category="toilet_paper",
+            quantity=4,
+            unit="units",
+            package_count=4,
+        )
+
+
+def test_unit_quantity_must_match_package_count() -> None:
+    with pytest.raises(ValidationError, match="quantity must match package_count"):
+        product(
+            category="toilet_paper",
+            quantity=4,
+            unit="units",
+            package_count=6,
+            unit_length=30,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"), [("package_count", 0), ("unit_length", 0)]
+)
+def test_toilet_paper_requires_positive_package_values(
+    field: str, value: float
+) -> None:
+    package_data: dict[str, object] = {"package_count": 4, "unit_length": 30}
+    package_data[field] = value
+
+    with pytest.raises(ValidationError, match="greater than 0"):
+        product(
+            category="toilet_paper",
+            quantity=4,
+            unit="units",
+            **package_data,
+        )
+
+
 @pytest.mark.parametrize("field,value", [("price", 0), ("quantity", -1)])
 def test_rejects_non_positive_values(field: str, value: float) -> None:
     with pytest.raises(ValidationError):
