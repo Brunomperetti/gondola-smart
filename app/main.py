@@ -7,7 +7,7 @@ from app.api.routes import router
 
 app = FastAPI(
     title="Gondola Smart",
-    description="Normalización y ranking de precios de productos.",
+    description="Visión de góndolas, validación y ranking seguro de productos.",
     version=__version__,
 )
 app.include_router(router)
