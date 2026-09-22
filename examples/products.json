@@ -1,0 +1,14 @@
+[
+  {"id":"tooth_001","name":"Total Clean Mint","brand":"Colgate","variant":"Clean Mint","category":"toothpaste","price":3200,"quantity":140,"unit":"g","confidence":0.94},
+  {"id":"tooth_002","name":"Triple Acción","brand":"Colgate","variant":"Original","category":"toothpaste","price":2450,"quantity":90,"unit":"g","confidence":0.89},
+  {"id":"tooth_003","name":"Pro Salud","brand":"Oral-B","variant":"Menta","category":"toothpaste","price":3600,"quantity":120,"unit":"g","confidence":0.71},
+  {"id":"cookie_001","name":"Chocolinas","brand":"Bagley","category":"cookies","price":1850,"quantity":250,"unit":"g","confidence":0.96},
+  {"id":"cookie_002","name":"Diversión","brand":"Arcor","category":"cookies","price":2300,"quantity":400,"unit":"g","confidence":0.91},
+  {"id":"cookie_003","name":"Surtidas","brand":"Terrabusi","category":"cookies","price":2900,"quantity":0.5,"unit":"kg","confidence":0.87},
+  {"id":"det_001","name":"Lavavajillas Limón","brand":"Magistral","category":"detergent","price":2750,"quantity":500,"unit":"ml","confidence":0.93},
+  {"id":"det_002","name":"Detergente Aloe","brand":"Cif","category":"detergent","price":3600,"quantity":750,"unit":"ml","confidence":0.9},
+  {"id":"det_003","name":"Ultra Limón","brand":"Ala","category":"detergent","price":4400,"quantity":1.25,"unit":"l","confidence":0.86},
+  {"id":"paper_001","name":"Higiénico Doble Hoja","brand":"Higienol","category":"toilet_paper","price":4200,"quantity":4,"unit":"units","package_count":4,"unit_length":30,"confidence":0.95},
+  {"id":"paper_002","name":"Higiénico Premium","brand":"Elite","category":"toilet_paper","price":5700,"quantity":6,"unit":"units","package_count":6,"unit_length":30,"confidence":0.92},
+  {"id":"paper_003","name":"Higiénico Rendidor","brand":"Campanita","category":"toilet_paper","price":6800,"quantity":4,"unit":"units","package_count":4,"unit_length":80,"confidence":0.7}
+]
