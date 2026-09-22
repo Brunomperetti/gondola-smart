@@ -17,7 +17,10 @@ loyalty prices, cards/apps, multi-buy and minimum-quantity conditions. Any
 conditional price must add CONDITIONAL_PRICE and require confirmation. For toilet
 paper and paper towels extract both package_count and visible unit_length in
 metres; never infer missing metres. Bounding boxes are optional normalized
-coordinates from 0 to 1. Confidence values express actual extraction certainty.
+objects with x_min, y_min, x_max, and y_max coordinates from 0 to 1. Set
+price_type to regular only when the label provides no visible promotion, loyalty,
+or purchase condition; use unknown when its nature cannot be established.
+Confidence values express actual extraction certainty.
 Return only the requested structured extraction. Do not calculate value, compare
 products, rank products, or choose a best buy.
 """.strip()

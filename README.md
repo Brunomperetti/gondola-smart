@@ -76,6 +76,20 @@ la API.
 > `set -a; source .env; set +a`; PowerShell puede definir cada variable con
 > `$env:VARIABLE="valor"`.
 
+### Primera prueba real
+
+En PowerShell, probar primero el proveedor independientemente de FastAPI:
+
+```powershell
+$env:VISION_PROVIDER="openai"
+$env:OPENAI_API_KEY="..."
+python scripts/live_vision_smoke.py gondola.jpg
+```
+
+Opcionalmente pueden agregarse `--category toothpaste` y `--query "pasta
+dental"`. Después, iniciar la API con `uvicorn app.main:app --reload` y abrir
+Swagger en <http://127.0.0.1:8000/docs>.
+
 ## Ejecución y endpoints
 
 ```bash
@@ -140,6 +154,11 @@ datos ausentes/ambiguos, asociación precio-producto dudosa, promociones o preci
 condicionados. `unsupported_products` conserva categorías futuras. Los candidatos
 incluyen `source_image_index`, texto original, confidence, issues y bounding boxes
 cuando el proveedor puede obtenerlos.
+
+En v0.2 solo `price_type: regular` sin `price_condition` es automáticamente
+comparable. `promotion`, `loyalty`, cualquier condición y también `unknown`
+requieren confirmación: `unknown` significa que el proveedor no pudo demostrar
+que el precio fuera regular e incondicional.
 
 Las fotos superpuestas se deduplican conservadoramente usando marca, nombre,
 variante, cantidad, unidad y precio; se conserva la detección de mayor confianza.

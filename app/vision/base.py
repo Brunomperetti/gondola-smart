@@ -20,7 +20,7 @@ class VisionHints:
 
 
 class VisionProvider(Protocol):
-    def analyze_images(
+    async def analyze_images(
         self, images: list[ImageInput], hints: VisionHints
     ) -> VisionDetectionResult: ...
 

@@ -24,7 +24,7 @@ class MockProductDetector:
 class MockVisionProvider:
     """Deterministic image provider for local development and CI."""
 
-    def analyze_images(
+    async def analyze_images(
         self, images: list[ImageInput], hints: VisionHints
     ) -> VisionDetectionResult:
         products = MockProductDetector().detect()
@@ -44,9 +44,16 @@ class MockVisionProvider:
                 package_count=product.package_count,
                 unit_length=product.unit_length,
                 confidence=product.confidence or 0.99,
+                product_confidence=product.confidence or 0.99,
+                price_confidence=0.99,
                 association_confidence=0.99,
+                product_bbox=None,
+                price_bbox=None,
                 price_type="regular",
+                price_condition=None,
+                issues=[],
+                requires_confirmation=False,
             )
             for index, product in enumerate(products)
         ]
-        return VisionDetectionResult(candidates=candidates)
+        return VisionDetectionResult(candidates=candidates, warnings=[])

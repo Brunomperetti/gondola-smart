@@ -2,7 +2,7 @@
 
 import base64
 
-from openai import APITimeoutError, OpenAI
+from openai import APITimeoutError, AsyncOpenAI
 from pydantic import ValidationError
 
 from app.models.detection import VisionDetectionResult
@@ -21,9 +21,9 @@ class OpenAIVisionProvider:
 
     def __init__(self, api_key: str, model: str, timeout: float = 45) -> None:
         self.model = model
-        self.client = OpenAI(api_key=api_key, timeout=timeout, max_retries=1)
+        self.client = AsyncOpenAI(api_key=api_key, timeout=timeout, max_retries=1)
 
-    def analyze_images(
+    async def analyze_images(
         self, images: list[ImageInput], hints: VisionHints
     ) -> VisionDetectionResult:
         hint_text = (
@@ -46,7 +46,7 @@ class OpenAIVisionProvider:
                 }
             )
         try:
-            response = self.client.responses.parse(
+            response = await self.client.responses.parse(
                 model=self.model,
                 input=[
                     {"role": "system", "content": VISION_EXTRACTION_PROMPT},

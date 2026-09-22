@@ -1,4 +1,6 @@
+import asyncio
 from io import BytesIO
+import inspect
 import os
 
 from fastapi.testclient import TestClient
@@ -8,6 +10,7 @@ import pytest
 from app.config import Settings, get_settings
 from app.main import app
 from app.models.detection import (
+    BoundingBox,
     DetectedProductCandidate,
     DetectionIssue,
     VisionDetectionResult,
@@ -16,6 +19,7 @@ from app.services.analysis import classify_candidate
 from app.vision.base import ImageInput, VisionHints, VisionProviderError
 from app.vision.deduplication import deduplicate_candidates
 from app.vision.mock_detector import MockVisionProvider
+from app.vision.openai_provider import OpenAIVisionProvider
 from app.vision.provider_factory import get_vision_provider
 
 
@@ -31,6 +35,7 @@ def candidate(**changes: object) -> DetectedProductCandidate:
         "source_image_index": 0,
         "name": "Total",
         "brand": "Colgate",
+        "variant": None,
         "category": "toothpaste",
         "price": 3200,
         "price_text": "$3.200",
@@ -38,8 +43,17 @@ def candidate(**changes: object) -> DetectedProductCandidate:
         "quantity_text": "140 g",
         "unit": "g",
         "confidence": 0.95,
+        "product_confidence": 0.95,
+        "price_confidence": 0.95,
         "association_confidence": 0.95,
+        "product_bbox": None,
+        "price_bbox": None,
         "price_type": "regular",
+        "price_condition": None,
+        "package_count": None,
+        "unit_length": None,
+        "issues": [],
+        "requires_confirmation": False,
     }
     values.update(changes)
     return DetectedProductCandidate.model_validate(values)
@@ -55,6 +69,18 @@ def test_analyze_accepts_real_image_formats(fmt: str, content_type: str) -> None
     )
     assert response.status_code == 200
     assert response.json()["analysis"]["images_received"] == 1
+
+
+def test_analyze_mock_runs_detection_classification_and_ranking() -> None:
+    response = TestClient(app).post(
+        "/analyze",
+        files={"files": ("shelf.jpg", image_bytes("JPEG"), "image/jpeg")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["analysis"]["rankable_count"] > 0
+    assert payload["rankings"]["toothpaste"][0]["product"]["name"] == "Total Clean Mint"
+    assert payload["rankings"]["toothpaste"][0]["position"] == 1
 
 
 def test_rejects_fake_jpeg() -> None:
@@ -107,6 +133,7 @@ def test_candidate_transforms_to_product() -> None:
         ({"confidence": 0.74}, DetectionIssue.LOW_CONFIDENCE),
         ({"association_confidence": 0.5}, DetectionIssue.AMBIGUOUS_PRICE_ASSOCIATION),
         ({"price_type": "loyalty", "price_condition": "Club X"}, DetectionIssue.CONDITIONAL_PRICE),
+        ({"price_type": "unknown"}, DetectionIssue.CONDITIONAL_PRICE),
     ],
 )
 def test_unsafe_candidates_are_not_products(
@@ -146,11 +173,17 @@ def test_does_not_deduplicate_distinct_variants() -> None:
 
 def test_mock_provider_and_factory() -> None:
     provider = get_vision_provider(Settings(vision_provider="mock"))
-    result = provider.analyze_images(
-        [ImageInput(image_bytes(), "image/jpeg")], VisionHints()
+    result = asyncio.run(
+        provider.analyze_images(
+            [ImageInput(image_bytes(), "image/jpeg")], VisionHints()
+        )
     )
     assert isinstance(provider, MockVisionProvider)
     assert result.candidates
+
+
+def test_openai_provider_contract_is_async() -> None:
+    assert inspect.iscoroutinefunction(OpenAIVisionProvider.analyze_images)
 
 
 def test_openai_factory_requires_key() -> None:
@@ -177,7 +210,9 @@ def test_analyze_returns_503_when_openai_key_is_missing(
 
 def test_analyze_returns_controlled_provider_error(monkeypatch: pytest.MonkeyPatch) -> None:
     class BrokenProvider:
-        def analyze_images(self, images: list[ImageInput], hints: VisionHints) -> VisionDetectionResult:
+        async def analyze_images(
+            self, images: list[ImageInput], hints: VisionHints
+        ) -> VisionDetectionResult:
             raise VisionProviderError("vision provider request failed")
 
     monkeypatch.setattr("app.api.routes.get_vision_provider", lambda: BrokenProvider())
@@ -197,7 +232,31 @@ def test_live_openai_provider_opt_in() -> None:
     provider = get_vision_provider(
         Settings(vision_provider="openai", openai_api_key=os.environ["OPENAI_API_KEY"])
     )
-    result = provider.analyze_images(
-        [ImageInput(image_bytes("PNG"), "image/png")], VisionHints()
+    result = asyncio.run(
+        provider.analyze_images(
+            [ImageInput(image_bytes("PNG"), "image/png")], VisionHints()
+        )
     )
     assert isinstance(result, VisionDetectionResult)
+
+
+def test_structured_output_schema_uses_explicit_bounding_box_object() -> None:
+    schema = VisionDetectionResult.model_json_schema()
+    assert set(schema["required"]) == {"candidates", "warnings"}
+    bbox = schema["$defs"]["BoundingBox"]
+    assert bbox["type"] == "object"
+    assert set(bbox["required"]) == {"x_min", "y_min", "x_max", "y_max"}
+    assert bbox["additionalProperties"] is False
+    for coordinate in bbox["properties"].values():
+        assert coordinate["minimum"] == 0
+        assert coordinate["maximum"] == 1
+    candidate_schema = schema["$defs"]["DetectedProductCandidate"]
+    assert set(candidate_schema["required"]) == set(candidate_schema["properties"])
+    assert candidate_schema["additionalProperties"] is False
+
+
+def test_bounding_box_validates_coordinate_order() -> None:
+    valid = BoundingBox(x_min=0.1, y_min=0.2, x_max=0.8, y_max=0.9)
+    assert valid.x_max == 0.8
+    with pytest.raises(ValueError, match="maximums"):
+        BoundingBox(x_min=0.8, y_min=0.2, x_max=0.1, y_max=0.9)

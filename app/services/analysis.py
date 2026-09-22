@@ -127,7 +127,12 @@ def classify_candidate(
         checked = _add_issue(checked, DetectionIssue.AMBIGUOUS_PRICE)
     if checked.association_confidence is not None and checked.association_confidence < 0.75:
         checked = _add_issue(checked, DetectionIssue.AMBIGUOUS_PRICE_ASSOCIATION)
-    if checked.price_type in {"promotion", "loyalty"} or checked.price_condition:
+    # Unknown means the provider could not establish that the visible price is
+    # unconditional. For v0.2 only an explicit regular price can be ranked.
+    if (
+        checked.price_type in {"promotion", "loyalty", "unknown"}
+        or checked.price_condition
+    ):
         checked = _add_issue(checked, DetectionIssue.CONDITIONAL_PRICE)
     if checked.category in {"toilet_paper", "paper_towel"}:
         if checked.package_count is None or checked.package_count <= 0:
@@ -183,7 +188,7 @@ class AnalysisService:
         if category_hint and category_hint not in CATEGORY_CONFIG:
             raise HintValidationError("category_hint is not a supported category")
         images = await validate_images(uploads, self.settings)
-        detected = self.provider.analyze_images(
+        detected = await self.provider.analyze_images(
             images, VisionHints(category_hint=category_hint, query=query)
         )
         unique, duplicates = deduplicate_candidates(detected.candidates)
