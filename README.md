@@ -1,133 +1,185 @@
 # Gondola Smart
 
-**Gondola Smart MVP v0.1** es el núcleo de una aplicación que compara productos de
-supermercado de distintos tamaños y presentaciones. Convierte cada precio a una
-unidad adecuada para su categoría (por ejemplo, ARS/100 g, ARS/kg, ARS/litro,
-ARS/unidad o ARS/metro) y ordena las alternativas desde la más conveniente.
+## Gondola Smart MVP v0.2 — Real Shelf Vision
 
-## Flujo del producto
-
-El flujo previsto es:
+Gondola Smart recibe de una a tres fotografías reales de una góndola, extrae
+productos y etiquetas de precio con un proveedor de visión y entrega solamente
+los productos seguros al motor matemático de comparación de v0.1. Los resultados
+inciertos siguen visibles, pero nunca pueden convertirse silenciosamente en la
+«mejor compra».
 
 ```text
-Foto de góndola
-       ↓
-Detección de productos
-       ↓
-Extracción de precios y cantidades
-       ↓
-Normalización
-       ↓
-Ranking
-       ↓
-Mejor compra
+imágenes → validación → proveedor de visión → candidatos incompletos
+         → validación determinística → deduplicación → Product v0.1 → ranking
 ```
 
-La versión 0.1 comienza en datos estructurados. Incluye un detector mock que lee
-productos ficticios de `examples/products.json`; todavía no realiza OCR ni analiza
-imágenes. El detector está aislado del motor de comparación para poder sustituirlo
-en el futuro sin modificar la lógica de negocio.
+La IA **solo observa y extrae** nombre, marca, variante, categoría, precio,
+cantidad, presentación, confianza y ubicaciones aproximadas. No calcula precios
+normalizados ni elige ganadores. La validación, exclusión de datos dudosos,
+normalización y clasificación son código determinístico.
 
 ## Arquitectura
 
 ```text
 app/
-├── api/routes.py              # Contratos y endpoints HTTP
-├── comparison/
-│   ├── categories.py          # Reglas centrales por categoría
-│   ├── normalize.py           # Conversiones y precios normalizados
-│   └── ranking.py             # Agrupación y ranking
-├── models/product.py          # Modelo y validaciones del producto
-├── vision/mock_detector.py    # Proveedor mock reemplazable
-└── main.py                    # Aplicación FastAPI
-examples/products.json         # Datos de demostración
-tests/                         # Pruebas unitarias y de API
+├── api/routes.py                 # HTTP y traducción de errores
+├── comparison/                   # motor determinístico estable de v0.1
+├── models/
+│   ├── product.py                # producto estricto y comparable
+│   └── detection.py              # candidato visual nullable, issues y bbox
+├── services/analysis.py          # orquestación del pipeline
+├── vision/
+│   ├── base.py                   # protocolo neutral y errores
+│   ├── prompts.py                # prompt conservador y testeable
+│   ├── openai_provider.py        # OpenAI Responses API
+│   ├── mock_detector.py          # proveedor local/CI
+│   ├── provider_factory.py       # selección por configuración
+│   └── deduplication.py          # solapamiento entre fotos
+├── config.py                     # variables de entorno
+└── main.py
 ```
 
-El motor dentro de `app/comparison` no depende de FastAPI. Las categorías
-soportadas son `cookies`, `toothpaste`, `pasta`, `rice`, `shampoo`, `detergent`,
-`soda`, `toilet_paper`, `paper_towel`, `diapers` y `eggs`. Los productos se
-comparan únicamente dentro de su categoría.
+Las categorías comparables son `cookies`, `toothpaste`, `pasta`, `rice`,
+`shampoo`, `detergent`, `soda`, `toilet_paper`, `paper_towel`, `diapers` y
+`eggs`. Una categoría desconocida se conserva en `unsupported_products` con el
+issue `UNSUPPORTED_CATEGORY`, sin entrar al ranking.
 
-Para papeles, el total de metros se obtiene mediante
-`package_count × unit_length`. Un producto con `confidence < 0.75` se conserva en
-el ranking y aparece con `requires_confirmation: true`.
-
-## Instalación
+## Instalación y configuración
 
 Se requiere Python 3.12.
 
-En Linux o macOS:
-
 ```bash
 python3.12 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
-En Windows PowerShell:
+La aplicación lee variables del entorno (un archivo `.env` puede cargarse desde
+la shell o con la herramienta preferida; no se versiona):
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+```dotenv
+VISION_PROVIDER=mock
+OPENAI_API_KEY=
+OPENAI_VISION_MODEL=gpt-5.6-luna
+OPENAI_TIMEOUT_SECONDS=45
+MAX_IMAGES_PER_ANALYSIS=3
+MAX_IMAGE_SIZE_MB=10
 ```
 
-En Windows CMD:
+Para visión real, exportar `VISION_PROVIDER=openai` y `OPENAI_API_KEY` con una
+clave válida. El modelo es configurable con `OPENAI_VISION_MODEL`; ninguna clave
+se incluye en código, respuestas o logs. Para desarrollo y CI, `mock` no consume
+la API.
 
-```bat
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -r requirements.txt
-```
+> La aplicación no carga `.env` por sí sola. En Bash puede usarse
+> `set -a; source .env; set +a`; PowerShell puede definir cada variable con
+> `$env:VARIABLE="valor"`.
 
-## Ejecución
-
-Iniciar el servidor de desarrollo:
+## Ejecución y endpoints
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-La documentación interactiva Swagger queda disponible en
-<http://127.0.0.1:8000/docs>.
+Swagger queda en <http://127.0.0.1:8000/docs>.
 
-### Endpoints
+- `GET /health`: salud y versión.
+- `POST /compare`: conserva el contrato estructurado de v0.1.
+- `GET /demo` y `POST /analyze/mock`: demostración compatible con v0.1.
+- `POST /analyze`: `multipart/form-data`, campo repetible `files` (1–3 JPEG,
+  PNG o WebP), más `category_hint` y `query` opcionales.
 
-- `GET /health`: estado y versión de la aplicación.
-- `POST /compare`: recibe `{"products": [...]}` y agrupa/rankea esos productos.
-- `GET /demo`: compara los productos ficticios del archivo de ejemplo.
-- `POST /analyze/mock`: simula detección, normalización y ranking completos.
-
-Cuando dos productos tienen exactamente el mismo precio normalizado, el ranking
-conserva el orden en el que fueron recibidos. Las posiciones continúan siendo
-secuenciales; esta versión no asigna posiciones compartidas a los empates.
-
-Ejemplo mínimo para `/compare`:
+Prueba real con una o varias fotos:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/compare \
-  -H 'Content-Type: application/json' \
-  -d '{"products":[{"id":"rice_1","name":"Arroz","brand":"Ejemplo","category":"rice","price":1800,"quantity":1,"unit":"kg"}]}'
+curl -X POST http://127.0.0.1:8000/analyze \
+  -F 'files=@gondola-izquierda.jpg;type=image/jpeg' \
+  -F 'files=@gondola-derecha.jpg;type=image/jpeg' \
+  -F 'category_hint=toothpaste' \
+  -F 'query=pasta dental menta'
 ```
+
+En PowerShell:
+
+```powershell
+curl.exe -X POST http://127.0.0.1:8000/analyze `
+  -F "files=@gondola.jpg;type=image/jpeg" `
+  -F "category_hint=toothpaste"
+```
+
+También se puede abrir Swagger, expandir `POST /analyze`, pulsar **Try it out** y
+seleccionar las fotografías. Se valida el contenido real con Pillow, no solamente
+el nombre. Cada archivo admite como máximo 10 MB por defecto y nunca se persiste:
+solo se procesa en memoria y se envía al proveedor configurado. No se registra el
+binario ni su base64.
+
+## Respuesta de `/analyze`
+
+```json
+{
+  "analysis": {
+    "images_received": 2,
+    "detections_total": 3,
+    "duplicates_removed": 1,
+    "rankable_count": 1,
+    "needs_confirmation_count": 1,
+    "unsupported_count": 0
+  },
+  "rankings": {"toothpaste": [{"position": 1, "product": {}, "normalized_price": 2285.71, "comparison_quantity": 100, "comparison_unit": "g", "display_unit": "100 g", "savings_vs_next": null}]},
+  "rankable_products": [],
+  "needs_confirmation": [],
+  "unsupported_products": [],
+  "warnings": []
+}
+```
+
+`rankable_products` contiene únicamente instancias válidas del modelo estricto de
+v0.1. `needs_confirmation` conserva candidatos con baja confianza (`< 0.75`),
+datos ausentes/ambiguos, asociación precio-producto dudosa, promociones o precios
+condicionados. `unsupported_products` conserva categorías futuras. Los candidatos
+incluyen `source_image_index`, texto original, confidence, issues y bounding boxes
+cuando el proveedor puede obtenerlos.
+
+Las fotos superpuestas se deduplican conservadoramente usando marca, nombre,
+variante, cantidad, unidad y precio; se conserva la detección de mayor confianza.
+No se fusionan productos solo por compartir marca. El descartado queda auditable
+en `needs_confirmation` con `DUPLICATE_CANDIDATE`.
+
+## Errores
+
+- `400`: cantidad de archivos o imagen inválida.
+- `413`: archivo demasiado grande.
+- `415`: medio no soportado o contenido distinto al tipo declarado.
+- `422`: hint inválido o validación HTTP.
+- `502`: fallo/respuesta inválida del proveedor.
+- `503`: proveedor desconocido o clave ausente.
+- `504`: timeout externo.
+
+No se devuelve un ranking alternativo o inventado cuando el proveedor falla.
 
 ## Pruebas
 
-Con el entorno virtual activo:
-
 ```bash
-pytest
+python -m pytest -q
+python -m compileall -q app tests
+git diff --check
 ```
 
-Las pruebas cubren conversiones, todas las modalidades de normalización,
-validaciones, ranking, agrupación por categoría, confianza y los endpoints.
-El workflow de GitHub Actions **Tests** ejecuta `python -m pytest -q` con Python
-3.12 ante cada push a `main` y cada pull request dirigido a `main`.
+Las pruebas normales usan Pillow, mocks e inyección; no necesitan una clave ni
+hacen llamadas externas. La integración real es explícitamente opt-in:
 
-## Alcance futuro
+```bash
+RUN_LIVE_VISION_TESTS=1 OPENAI_API_KEY='...' \
+  VISION_PROVIDER=openai python -m pytest -m live -q
+```
 
-Una v0.2 puede introducir una interfaz formal de detectores, un primer proveedor
-de visión/OCR, revisión manual de detecciones inciertas y más reglas de
-presentación (por ejemplo, papel de cocina comparable por hoja). No forman parte
-de esta versión el reconocimiento real de imágenes, autenticación, una base de
-datos ni una aplicación móvil.
+## Limitaciones y próximo paso
+
+La calidad depende de iluminación, resolución, oclusión, perspectiva y legibilidad
+de etiquetas. La deduplicación v0.2 es textual, no geométrica; tampoco hace OCR
+especializado, escaneo de códigos, persistencia o corrección interactiva. Una v0.3
+debería incorporar una interfaz de revisión que muestre bounding boxes, corrección
+manual, mejor emparejamiento espacial producto–precio y métricas con un conjunto
+propio de imágenes autorizadas. APK, frontend completo y autenticación quedan
+fuera de este alcance.
